@@ -1,0 +1,270 @@
+% File Name: mainSmileSwitchTesting
+% Purpose: Smile detection of pre-loaded testing images within same 
+%          directory
+% Note: Prior to using code, need to obtain constant values 
+%       - faceParameters, mouthParameters values from training 
+%       - manually go through testing images and look for a smile or non-smile
+%         and update smileMatrix
+% Output: Sensitivity and Specificity in 'accuracyResults.txt'
+
+clc;
+close all;
+clear all;
+
+% Load training images from same directory
+images = dir('Picture*.jpg');
+k = size(images);
+
+% Constants
+% From faceInitialization ('faceParameters.txt')
+meanFace_r = 0.444;
+meanFace_g = 0.3199;
+stdDev_r = 0.0501;
+stdDev_g = 0.0191;
+% From mouthInitialization ('mouthParameters.txt')
+meanMouth_r = 0.4342; 
+meanMouth_g = 0.2596;
+meanMouth_b = 0.3062;
+% Face position and size estimation parameters
+alpha = 1.5;
+beta = 3;
+% Mouth bounding box size (mouthWidth x2 by mouthHeight x2)
+mouthWidth = 20;
+mouthHeight = 10;
+% Matrix for actualy Smile(1) and Non-Smile(0) for testing images in order
+smileMatrix = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1
+];
+numOfSmiles=sum(smileMatrix);
+numOfNonSmiles=k(1)-numOfSmiles;
+% Matrices to keep accuracy information for each image
+truepositive=[0];
+truenegative=[0];
+falsepositive=[0];
+falsenegative=[0];
+frame_x = 320;
+frame_y = 240;
+
+% Loop through all images
+for i=1:k
+    origImage = imread(images(i).name);
+    rgbImage = double(origImage);
+    [rows, columns, numberOfColorPlanes] = size(rgbImage);
+    redPlane = rgbImage(:,:,1);
+    greenPlane = rgbImage(:,:,2);
+    bluePlane = rgbImage(:,:,3);
+
+    % Loop through all pixels to convert to chromaticity transformation
+    for y=1:rows
+        for x=1:columns
+            red = redPlane(y,x);
+            green = greenPlane(y,x);
+            blue = bluePlane(y,x);
+
+            normalizedRed = red/(red+green+blue);
+            normalizedGreen = green/(red+green+blue);
+            normalizedBlue = blue/(red+green+blue);
+
+            redPlane(y,x) = normalizedRed;
+            greenPlane(y,x) = normalizedGreen;
+            bluePlane(y,x) = normalizedBlue;
+            
+            % Calculation if skin (towards 1) or non-skin (towards 0)
+            skin_yes_no = exp(-((normalizedRed-meanFace_r)^2)/(2*(stdDev_r^2))-((normalizedGreen-meanFace_g)^2)/(2*(stdDev_g^2)));
+            % Colour filtering map
+            CFM(y,x) = skin_yes_no;
+       end
+    end
+    
+    % Load chromaticity transformation pixels into new image
+    chromImage(:,:,1) = redPlane;
+    chromImage(:,:,2) = greenPlane;
+    chromImage(:,:,3) = bluePlane;
+
+    % Creation of histograms from projection onto x and y coordinates
+    hist_x = sum(CFM);
+    hist_y = sum(CFM,2);
+    
+    % Calculating centre points for x and y coordinates
+    for a=1:frame_x
+        histTemp_x(a) = a*hist_x(a);
+    end
+    x_centre = sum(histTemp_x,2)/sum(hist_x,2);
+    
+    for b=1:frame_y
+        histTemp_y(b) = b*hist_y(b);
+    end
+    y_centre = sum(histTemp_y)/sum(hist_y);
+    
+    % Calculating width and height
+    for a=1:frame_x
+        widthTemp(a) = ((a-x_centre)^2)*hist_x(a);
+    end
+    width = alpha*sqrt((sum(widthTemp,2)/sum(hist_x,2)));
+    x_1 = x_centre-width/2;
+    x_2 = x_centre+width/2;
+    
+    for b=1:frame_y
+        heightTemp(b) = ((b-y_centre)^2)*hist_y(b);
+    end
+    height = beta*sqrt((sum(heightTemp)/sum(hist_y)));
+    y_1 = y_centre-height/2;
+    y_2 = y_centre+height/2;
+    
+    % Display histograms with displaying x,y centre lines, width, and height
+%      figure; plot(hist_x);
+%      hold on
+%      plot([x_centre,x_centre],[0,frame_y]);
+%      plot([x_1,x_1],[0,frame_y]);
+%      plot([x_2,x_2],[0,frame_y]);
+%      axis([0 frame_x 0 frame_y])
+%     
+%      figure; plot(hist_y);
+%      hold on
+%      plot([y_centre,y_centre],[0,frame_x]);
+%      plot([y_1,y_1],[0,frame_x]);
+%      plot([y_2,y_2],[0,frame_x]);
+%      axis([0 frame_y 0 frame_x])
+   
+    % Checking to see not out of bound when cropping face
+    if x_1<0
+        x_1=0;
+    end
+    if x_2>frame_x
+        x_2=frame_x;
+    end
+    if y_1<0
+        y_1=0;
+    end
+    if y_2>frame_y
+        y_2=frame_y;
+    end
+
+    % Cropping face with centre points, width, and height found
+    croppedFace = chromImage(y_1:y_2,x_1:x_2,:);
+    [rows, columns, numberOfColorPlanes] = size(croppedFace);
+    croppedFace_rgb = origImage(y_1:y_2,x_1:x_2,:);
+    
+    % Mouth segmentation (blob analysis)
+    binaryImage = (croppedFace(:,:,1)>meanMouth_r)&(croppedFace(:,:,2)<meanMouth_g)&(croppedFace(:,:,3)<meanMouth_b);
+    labeledImage = bwlabel(binaryImage);
+    blobMeasurements = regionprops(labeledImage, 'all');
+    numberOfBlobs = length(blobMeasurements);
+    maxArea = -1;
+    
+    % Loop through all blobs
+    for k = 1 : numberOfBlobs 
+        blobArea = blobMeasurements(k).Area;
+        blobCentroid = blobMeasurements(k).Centroid;
+        if blobArea > maxArea
+               maxArea = blobArea;
+               centroid = blobCentroid;
+        end
+    end
+
+    % Getting centroid information from largest blob detected
+    x_Centroid = centroid(1);
+    y_Centroid = centroid(2);
+
+    % Checking to see not out of bound when cropping mouth
+    if x_Centroid<(mouthWidth+1)
+        x_1=1;
+        x_2=x_Centroid+mouthWidth;
+    elseif x_Centroid>(columns-mouthWidth);
+            x_1=x_Centroid-mouthWidth;
+            x_2=columns;
+        else
+        x_1=x_Centroid-mouthWidth;
+         x_2=x_Centroid+mouthWidth;
+    end
+    if y_Centroid<(mouthHeight+1)
+        y_1=1;
+        y_2=y_Centroid+mouthHeight;
+    elseif y_Centroid>(rows-mouthHeight);
+            y_1=y_Centroid-mouthHeight;
+            y_2=rows;
+        else
+         y_1=y_Centroid-mouthHeight;
+         y_2=y_Centroid+mouthHeight;
+    end
+    
+    % Cropping mouth from original rgb image
+    croppedMouth = croppedFace_rgb(y_1:y_2,x_1:x_2,:);
+    
+    % Converting mouth image to greyscale
+    greyImage = 0.2989*croppedMouth(:,:,1)+0.5870*croppedMouth(:,:,2)+0.1140*croppedMouth(:,:,3);
+    
+    % Calculating mininum pixel intensity on top of frame (above lip) and
+    % middle of frame (teeth when smiling, between lips when non-smilin)
+    topMinPixel = min(greyImage([1:1],[round(columns/2)-round(round(columns/2)/2):round(columns/2)+round(round(columns/2)/2)]));
+    midMaxPixel =max(greyImage([round(rows/2):round(rows/2)],[round(columns/2)-round(round(columns/2)/2):round(columns/2)+round(round(columns/2)/2)]));
+
+    % Smile detected when middle area lighter than top area of frame
+    if midMaxPixel>topMinPixel
+        % Vector to keep track of tested smiles of testing images
+        smile(i)=1;
+    else smile(i)=0;
+    end
+ 
+    % Calculating accuracy values amongst all testing images
+    for x=1:i
+        if smileMatrix(i)==1
+           if smile(i)==1
+               truepositive(i) = 1;
+        elseif smile(i)==0
+            falsenegative(i)=1;
+           end
+        elseif smileMatrix(i)==0
+            if smile(i)==1
+                falsepositive(i)=1;
+            elseif smile(i)==0
+                truenegative(i)=1;
+            end
+        end
+    end
+ 
+    % Display Images
+    figure; imshow(origImage);
+    title (['Original RGB Image',int2str(i)]);
+    
+    figure; imshow(chromImage);
+    title (['Chromaticity Image',int2str(i)]);
+    
+    figure; imshow(CFM);
+    title (['CFM Image - Face Detection',int2str(i)]);
+    
+    figure; imshow(croppedFace);
+    title (['Cropped Face Image',int2str(i)]);
+    
+    figure; imshow(binaryImage);
+    title(['Binary Image - Lip Detection', int2str(i)]);
+    
+    figure; imshow(croppedMouth);
+    title (['Cropped Mouth Image',int2str(i)]);
+    
+    figure; imshow(greyImage);
+    title (['GrayScale Cropped Mouth Image',int2str(i)]);
+    hold on
+    [rows, columns, numberOfColorPlanes] = size(greyImage);
+    plot([round(columns/2) round(columns/2)],[0 rows], 'blue', 'LineWidth', 2);
+    plot([0 columns],[round(rows/2) round(rows/2)], 'blue', 'LineWidth', 2);
+    plot([round(columns/2)-round(round(columns/2)/2) round(columns/2)+round(round(columns/2)/2)],[1 1], 'green', 'LineWidth', 2);
+    plot([round(columns/2)-round(round(columns/2)/2) round(columns/2)+round(round(columns/2)/2)],[round(rows/2) round(rows/2)], 'red', 'LineWidth', 2);    
+end
+
+% Calculating sensitivity and specificity
+sensitivity=sum(truepositive)/(sum(truepositive)+sum(falsenegative));
+specificity=sum(truenegative)/(sum(truenegative)+sum(falsepositive));
+
+% Writing results to accuracyResults.txt
+file = fopen('accuracyResults.txt','wt');
+fprintf(file,'True Positive = %6.4f\n', sum(truepositive)/numOfSmiles);
+fprintf(file,'True Negative = %6.4f\n', sum(truenegative)/numOfNonSmiles);
+fprintf(file,'False Positive = %6.4f\n', sum(falsepositive)/numOfNonSmiles);
+fprintf(file,'False Negative = %6.4f\n\n', sum(falsenegative)/numOfSmiles);
+
+fprintf(file,'Sensitivity = %6.4f\n', sensitivity);
+fprintf(file,'Specificity = %6.4f\n\n', specificity);
+
+fprintf('End!');
+
+fclose(file);

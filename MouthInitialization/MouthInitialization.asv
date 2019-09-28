@@ -1,0 +1,88 @@
+%% File Name: mouthInitialization
+%% Purpose: Training of pre-loaded lip colour images within same directory 
+%%          to obtain average of skin pixels
+%% Output: Mean_Red, Mean_Green, Mean_Blue in 
+%%          'faceparameters.txt'
+
+clc;
+close all;
+clear all;
+
+% Load training images from same directory
+images = dir('lip*.jpg');
+k = size(images);
+
+% Loop through all images
+for a=1:k
+    rgbImage = imread(images(a).name);
+    rgbImage = double(rgbImage);
+    [rows, columns, numberOfColorPlanes] = size(rgbImage);
+    redPlane = rgbImage(:,:, 1);
+    greenPlane = rgbImage(:,:, 2);
+    bluePlane = rgbImage(:,:, 3);
+
+    % Loop through all pixels to convert into chromaticity transformation
+    for y=1:rows
+        for x=1:columns
+            Red = redPlane(y,x);
+            Green = greenPlane(y,x);
+            Blue = bluePlane(y,x);
+
+            NormalizedRed = Red/(Red+Green+Blue);
+            NormalizedGreen = Green/(Red+Green+Blue);
+            NormalizedBlue = Blue/(Red+Green+Blue);
+
+            redPlane(y,x) = NormalizedRed;
+            greenPlane(y,x) = NormalizedGreen;
+            bluePlane(y,x) = NormalizedBlue;
+       end
+    end
+    rgbImage(:,:,1) = redPlane;
+    rgbImage (:,:,2) = greenPlane;
+    rgbImage (:,:,3) = bluePlane;
+
+    all_pixels_r (:,:,a)= redPlane;
+    all_pixels_g (:,:,a) = greenPlane;
+    all_pixels_b (:,:,a) = bluePlane;
+    
+    % Calculate mean of red and green component
+    mean_r = mean2(redPlane);
+    mean_g = mean2(greenPlane);
+    mean_b = mean2(bluePlane);
+    
+    mean_cont_r(a,1) = mean_r;
+    mean_cont_g(a,1) = mean_g;
+    mean_cont_b(a,1) = mean_b;
+
+  %  figure; imshow(rgbImage);
+  %  title (['Normalized RGB Image',int2str(a)]);
+end
+
+mean_all_r = mean2(mean_cont_r);
+mean_all_g = mean2(mean_cont_g);
+mean_all_b = mean2(mean_cont_b);
+
+% Calculate standard deviation of red and green component
+for b=1:k
+    for y=1:rows
+            for x=1:columns
+                pixel_r_minus_average_squared(y,x,b) = (all_pixels_r(y,x,b) - mean_all_r)^2;
+                pixel_g_minus_average_squared(y,x,b) = (all_pixels_g(y,x,b) - mean_all_g)^2;
+                pixel_b_minus_average_squared(y,x,b) = (all_pixels_b(y,x,b) - mean_all_b)^2;
+            end
+    end
+end
+
+stdev_all_r = sqrt(sum(sum(sum(pixel_r_minus_average_squared(:,:,:),3)),2)/(k(1)*240*360));
+stdev_all_g = sqrt(sum(sum(sum(pixel_g_minus_average_squared(:,:,:),3)),2)/(k(1)*240*360));
+stdev_all_b = sqrt(sum(sum(sum(pixel_b_minus_average_squared(:,:,:),3)),2)/(k(1)*240*360));
+
+
+file = fopen('mouthParameters.txt','wt');
+fprintf(file,'Mean_Red = %6.4f\n', mean_all_r);
+fprintf(file,'Mean_Green = %6.4f\n', mean_all_g);
+fprintf(file,'Mean_Blue = %6.4f\n\n', mean_all_b);
+fprintf('End!');
+%fprintf(file,'StandardDeviation_Red = %6.4f\n', stdev_all_r);
+%%fprintf(file,'StandardDeviation_Blue = %6.4f\n\n', mean_all_b);
+fclose(file);

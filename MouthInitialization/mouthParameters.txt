@@ -1,0 +1,4 @@
+Mean_Red = 0.4342
+Mean_Green = 0.2596
+Mean_Blue = 0.3062
+

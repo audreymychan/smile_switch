@@ -1,0 +1,5 @@
+Mean_Red = 0.4296
+Mean_Green = 0.3158
+
+StdDev_Red = 0.0535
+StdDev_Green = 0.0193

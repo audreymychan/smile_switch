@@ -1,0 +1,8 @@
+True Positive = 0.0200
+True Negative = -0.0000
+False Positive = -0.0000
+False Negative = 0.0000
+
+Sensitivity = 1.0000
+Specificity =    NaN
+
